@@ -57,6 +57,7 @@ type REPL struct {
 	sessionTokens int
 	sessionTurns  int
 	mcp           *mcp.Manager
+	loadedSkills  map[string]bool
 }
 
 // Options configures a REPL.
@@ -809,7 +810,10 @@ func (r *REPL) addTrust(root string) {
 	if f == "" {
 		return
 	}
-	_ = os.MkdirAll(filepath.Dir(f), 0o755)
+	if err := os.MkdirAll(filepath.Dir(f), 0o755); err != nil {
+		r.Error("could not create trust directory: " + err.Error())
+		return
+	}
 	var t struct {
 		Paths []string `json:"paths"`
 	}
@@ -817,8 +821,13 @@ func (r *REPL) addTrust(root string) {
 		_ = json.Unmarshal(b, &t)
 	}
 	t.Paths = append(t.Paths, root)
-	if b, err := json.MarshalIndent(t, "", "  "); err == nil {
-		_ = os.WriteFile(f, b, 0o644)
+	b, err := json.MarshalIndent(t, "", "  ")
+	if err != nil {
+		r.Error("could not encode trust file: " + err.Error())
+		return
+	}
+	if err := os.WriteFile(f, b, 0o644); err != nil {
+		r.Error("could not write trust file: " + err.Error())
 	}
 }
 
@@ -1109,6 +1118,10 @@ func (r *REPL) loadSkill(name string) {
 		r.Error("usage: /skill <name>")
 		return
 	}
+	if r.loadedSkills[name] {
+		r.Info("skill already active: " + name)
+		return
+	}
 	for _, f := range r.skillFiles() {
 		if strings.TrimSuffix(filepath.Base(f), ".md") == name {
 			b, err := os.ReadFile(f)
@@ -1117,6 +1130,10 @@ func (r *REPL) loadSkill(name string) {
 				return
 			}
 			r.agent.AddSystem("The user activated the skill \"" + name + "\". Follow these instructions:\n\n" + string(b))
+			if r.loadedSkills == nil {
+				r.loadedSkills = map[string]bool{}
+			}
+			r.loadedSkills[name] = true
 			r.Info("loaded skill: " + name)
 			return
 		}

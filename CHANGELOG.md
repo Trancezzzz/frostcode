@@ -4,6 +4,21 @@ All notable changes are documented here. Releases follow `vMAJOR.MINOR.PATCH` se
 
 ---
 
+## v0.1.2b — 2026-06-25
+
+### Fixed
+- **`addTrust()` errors surfaced** — directory creation and file write failures now print an error message instead of silently doing nothing.
+- **`grep` truncation notice** — when results hit the 200-match cap, a notice is appended so the agent knows results are incomplete.
+- **`fetch_url` truncation notice** — responses over 1 MiB now include a notice that the body was cut short.
+- **Undo stack cleared on `/compact` warns the user** — if undo history exists when compacting, a message is printed before it is discarded.
+- **Skill dedup** — loading the same skill twice with `/skill <name>` is now a no-op with an info message; the system prompt no longer grows unboundedly.
+- **MCP protocol version extracted to constant** — `mcpProtocolVersion = "2024-11-05"` in `mcp/manager.go`; one place to update when the spec version changes.
+- **`captureFile` preserves original file permissions** — undo now restores the file's original mode instead of always writing `0o644`.
+- **Wrong repo name in update 404 error** — fixed `github.com/bob/frostcode` → `github.com/Trancezzzz/frostcode`.
+- **Package comment updated** in `tools.go` to mention mode note injection and goal persistence.
+
+---
+
 ## v0.1.1b — 2026-06-25
 
 ### Fixed

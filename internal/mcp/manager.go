@@ -10,6 +10,10 @@ import (
 	"frostgate/internal/config"
 )
 
+// mcpProtocolVersion is the MCP spec revision we advertise during the handshake.
+// Update this when the upstream spec version we target changes.
+const mcpProtocolVersion = "2024-11-05"
+
 // client is one configured MCP server. A client is kept even when its
 // connection fails so /mcp can report the server as disconnected; in that case
 // tr is nil and connErr holds the failure.
@@ -24,7 +28,7 @@ type client struct {
 // initialize performs the MCP handshake.
 func (c *client) initialize() error {
 	_, err := c.tr.call("initialize", map[string]any{
-		"protocolVersion": "2024-11-05",
+		"protocolVersion": mcpProtocolVersion,
 		"capabilities":    map[string]any{},
 		"clientInfo":      map[string]any{"name": "frostgate", "version": "1.0"},
 	})

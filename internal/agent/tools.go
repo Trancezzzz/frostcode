@@ -1,6 +1,7 @@
 // Package agent implements a coding-agent CLI on top of the Frostgate gateway:
-// local tools (file ops, shell, search), an agentic tool loop, and a terminal
-// REPL. The model reaches the tools via OpenAI function-calling.
+// local tools (file ops, shell, search), an agentic tool loop, a terminal REPL,
+// mode note injection, and persistent goal tracking. The model reaches the tools
+// via OpenAI function-calling.
 package agent
 
 import (
@@ -63,19 +64,24 @@ func DefaultTools(sb *Sandbox, sh *Shell) []Tool {
 	abs := sb.Resolve
 
 	// captureFile snapshots a file's current state; the returned closure
-	// restores it (rewriting prior bytes, or deleting a file that is new).
+	// restores it (rewriting prior bytes with original permissions, or deleting a file that is new).
 	captureFile := func(rel string) (func() error, error) {
 		p, err := abs(rel)
 		if err != nil {
 			return nil, err
 		}
+		info, statErr := os.Stat(p)
 		prior, readErr := os.ReadFile(p)
 		existed := readErr == nil
+		var origMode os.FileMode = 0o644
+		if statErr == nil {
+			origMode = info.Mode()
+		}
 		return func() error {
 			if !existed {
 				return os.Remove(p)
 			}
-			return os.WriteFile(p, prior, 0o644)
+			return os.WriteFile(p, prior, origMode)
 		}, nil
 	}
 
@@ -529,14 +535,14 @@ func matchGlob(pattern, name string) bool {
 	return ok
 }
 
-// grepFiles does a naive recursive substring search.
-// grepFiles searches under base, displaying paths relative to displayRoot.
+// grepFiles searches under base for query, displaying paths relative to displayRoot.
+// Results are capped at 200 matches; a notice is appended when the cap is hit.
 func grepFiles(displayRoot, base, query string) (string, error) {
 	if query == "" {
 		return "", fmt.Errorf("empty query")
 	}
-	root := displayRoot
 	var hits []string
+	truncated := false
 	_ = filepath.WalkDir(base, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() || skipDir(path) {
 			return nil
@@ -552,9 +558,10 @@ func grepFiles(displayRoot, base, query string) (string, error) {
 		for sc.Scan() {
 			ln++
 			if strings.Contains(sc.Text(), query) {
-				rel, _ := filepath.Rel(root, path)
+				rel, _ := filepath.Rel(displayRoot, path)
 				hits = append(hits, fmt.Sprintf("%s:%d: %s", filepath.ToSlash(rel), ln, strings.TrimSpace(sc.Text())))
 				if len(hits) >= 200 {
+					truncated = true
 					return filepath.SkipAll
 				}
 			}
@@ -564,7 +571,11 @@ func grepFiles(displayRoot, base, query string) (string, error) {
 	if len(hits) == 0 {
 		return "(no matches)", nil
 	}
-	return strings.Join(hits, "\n"), nil
+	result := strings.Join(hits, "\n")
+	if truncated {
+		result += "\n…[truncated: showing first 200 matches — narrow your search or use a subdirectory]"
+	}
+	return result, nil
 }
 
 // diffBlock renders a compact -old/+new diff (capped) for edit previews.
@@ -635,19 +646,29 @@ func treeView(base string, depth int) (string, error) {
 	return truncate(b.String(), 8000), nil
 }
 
-// fetchURL performs a GET and returns the body text (truncated).
+// fetchURL performs a GET and returns the body text, capped at 1 MiB.
+// A notice is appended when the body was cut short.
 func fetchURL(url string) (string, error) {
 	if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
 		return "", fmt.Errorf("url must start with http:// or https://")
 	}
+	const cap = 1 << 20 // 1 MiB
 	client := &http.Client{Timeout: 20 * time.Second}
 	resp, err := client.Get(url)
 	if err != nil {
 		return "", err
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20)) // 1 MiB cap
-	return fmt.Sprintf("HTTP %d\n%s", resp.StatusCode, truncate(string(body), 16000)), nil
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, cap+1))
+	truncated := len(body) > cap
+	if truncated {
+		body = body[:cap]
+	}
+	result := fmt.Sprintf("HTTP %d\n%s", resp.StatusCode, truncate(string(body), 16000))
+	if truncated {
+		result += "\n…[truncated: response exceeded 1 MiB — only the first 1 MiB is shown]"
+	}
+	return result, nil
 }
 
 // skipDir filters noisy directories from search/glob.

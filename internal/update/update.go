@@ -47,7 +47,7 @@ func Check() (*Release, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotFound {
-		return nil, fmt.Errorf("no releases found at github.com/bob/frostcode")
+		return nil, fmt.Errorf("no releases found at github.com/Trancezzzz/frostcode")
 	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("GitHub API returned %s", resp.Status)

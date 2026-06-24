@@ -203,7 +203,10 @@ func (a *Agent) Compact(ctx context.Context, force bool) (int, error) {
 	rebuilt = append(rebuilt, note)
 	rebuilt = append(rebuilt, recent...)
 	a.messages = rebuilt
-	a.undo = nil // file undo stack is unrelated, but message indices shifted
+	if len(a.undo) > 0 {
+		a.ui.Info(fmt.Sprintf("compaction cleared %d undo step(s) — /undo is no longer available for this session", len(a.undo)))
+		a.undo = nil
+	}
 
 	saved := before - tokens.EstimateMessages(a.messages)
 	if saved < 0 {
