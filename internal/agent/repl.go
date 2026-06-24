@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"runtime"
@@ -890,7 +891,23 @@ func (r *REPL) selfUpdate() {
 		r.Error("update failed: " + err.Error())
 		return
 	}
-	r.Info("updated to " + rel.TagName + " — restart frostcode to use the new version")
+
+	r.Info("updated to " + rel.TagName + " — restarting…")
+	exe, err := os.Executable()
+	if err != nil {
+		r.Error("could not locate executable to restart: " + err.Error())
+		return
+	}
+	cmd := exec.Command(exe, os.Args[1:]...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Env = os.Environ()
+	if err := cmd.Start(); err != nil {
+		r.Error("restart failed: " + err.Error())
+		return
+	}
+	os.Exit(0)
 }
 
 func (r *REPL) listTools() {
