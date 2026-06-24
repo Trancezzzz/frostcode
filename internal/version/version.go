@@ -6,4 +6,4 @@
 package version
 
 // Version is the current build version (a semver tag like "v0.2.0", or "dev").
-var Version = "v0.1.2b"
+var Version = "v0.1.3b"

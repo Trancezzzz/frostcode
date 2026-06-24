@@ -29,6 +29,23 @@ type Asset struct {
 	BrowserDownloadURL string `json:"browser_download_url"`
 }
 
+// CheckResult is the outcome of a background update check.
+type CheckResult struct {
+	Release *Release
+	Err     error
+}
+
+// CheckBackground starts a non-blocking update check and returns a channel that
+// receives exactly one CheckResult when the check completes (or times out).
+func CheckBackground() <-chan CheckResult {
+	ch := make(chan CheckResult, 1)
+	go func() {
+		rel, err := Check()
+		ch <- CheckResult{Release: rel, Err: err}
+	}()
+	return ch
+}
+
 // Check fetches the latest GitHub release and returns it.
 // Returns an error if the network request fails or the response is malformed.
 func Check() (*Release, error) {

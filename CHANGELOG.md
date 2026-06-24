@@ -4,6 +4,13 @@ All notable changes are documented here. Releases follow `vMAJOR.MINOR.PATCH` se
 
 ---
 
+## v0.1.3b — 2026-06-25
+
+### Added
+- **Startup update check** — frostcode now checks for a newer release in the background when it starts. If one is found, a one-line hint is shown right after the banner: `update available: v0.1.3b → v0.1.4b  (run /update to install)`. The check runs concurrently with startup and waits at most 2 s so it never stalls the REPL. Silently skipped on network errors or when already on the latest release.
+
+---
+
 ## v0.1.2b — 2026-06-25
 
 ### Fixed

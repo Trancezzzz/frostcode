@@ -58,6 +58,7 @@ type REPL struct {
 	sessionTurns  int
 	mcp           *mcp.Manager
 	loadedSkills  map[string]bool
+	updateCh      <-chan update.CheckResult
 }
 
 // Options configures a REPL.
@@ -99,6 +100,10 @@ func NewREPL(opt Options) *REPL {
 	if opt.Plan {
 		r.agent.SetMode(ModePlan)
 	}
+	// Kick off a background update check immediately so by the time the banner
+	// is printed the result is often already available.
+	r.updateCh = update.CheckBackground()
+
 	// Resume an existing session, or start a fresh one with a new id.
 	if opt.ResumeID != "" {
 		r.sessionID = opt.ResumeID
@@ -405,6 +410,7 @@ func (r *REPL) Run() {
 	}
 	defer r.onExit() // autosave + print resume hint
 	r.banner()
+	r.showUpdateHint()
 	if r.resumed {
 		r.replayHistory()
 	}
@@ -860,6 +866,29 @@ func (r *REPL) initProjectDoc() {
 		return
 	}
 	r.Info("wrote FROSTCODE.md — it loads automatically next session (or /clear won't reload; restart to apply)")
+}
+
+// showUpdateHint reads from the background update check channel (waiting at most
+// 2 s so startup stays snappy) and prints a one-line hint when a newer release
+// is available. Silently does nothing on network errors or when already current.
+func (r *REPL) showUpdateHint() {
+	if r.updateCh == nil {
+		return
+	}
+	var res update.CheckResult
+	select {
+	case res = <-r.updateCh:
+		r.updateCh = nil // consumed
+	case <-time.After(2 * time.Second):
+		return // check still in flight; don't block startup
+	}
+	if res.Err != nil || res.Release == nil {
+		return
+	}
+	if version.Version != "dev" && version.Version != "" && update.IsNewer(version.Version, res.Release.TagName) {
+		fmt.Printf("  %s%s update available: %s → %s  (run /update to install)%s\n",
+			cYellow, icInfo, version.Version, res.Release.TagName, cReset)
+	}
 }
 
 // selfUpdate checks GitHub for a newer frostcode release and, if one exists,
