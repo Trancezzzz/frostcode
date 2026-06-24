@@ -1,0 +1,44 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history for changelog generation
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build binaries
+        run: |
+          TAG=${GITHUB_REF_NAME}
+          LDFLAGS="-s -w -X frostgate/internal/version.Version=${TAG}"
+
+          GOOS=linux   GOARCH=amd64  go build -ldflags "${LDFLAGS}" -o dist/frostcode_linux_amd64        ./cmd/frostcode
+          GOOS=linux   GOARCH=arm64  go build -ldflags "${LDFLAGS}" -o dist/frostcode_linux_arm64        ./cmd/frostcode
+          GOOS=darwin  GOARCH=amd64  go build -ldflags "${LDFLAGS}" -o dist/frostcode_darwin_amd64       ./cmd/frostcode
+          GOOS=darwin  GOARCH=arm64  go build -ldflags "${LDFLAGS}" -o dist/frostcode_darwin_arm64       ./cmd/frostcode
+          GOOS=windows GOARCH=amd64  go build -ldflags "${LDFLAGS}" -o dist/frostcode_windows_amd64.exe  ./cmd/frostcode
+
+          GOOS=linux   GOARCH=amd64  go build -ldflags "${LDFLAGS}" -o dist/frostgate_linux_amd64        ./cmd/frostgate
+          GOOS=linux   GOARCH=arm64  go build -ldflags "${LDFLAGS}" -o dist/frostgate_linux_arm64        ./cmd/frostgate
+          GOOS=darwin  GOARCH=amd64  go build -ldflags "${LDFLAGS}" -o dist/frostgate_darwin_amd64       ./cmd/frostgate
+          GOOS=darwin  GOARCH=arm64  go build -ldflags "${LDFLAGS}" -o dist/frostgate_darwin_arm64       ./cmd/frostgate
+          GOOS=windows GOARCH=amd64  go build -ldflags "${LDFLAGS}" -o dist/frostgate_windows_amd64.exe  ./cmd/frostgate
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: dist/*
