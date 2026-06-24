@@ -1,0 +1,20 @@
+{
+  "listen": ":8080",
+  "providers": {
+    "local": { "kind": "mock", "keys": [{ "value": "none" }] }
+  },
+  "models": {
+    "demo": { "targets": [{ "provider": "local", "model": "demo-1" }] }
+  },
+  "cache": { "enabled": true, "ttl_seconds": 60, "similarity_threshold": 0.9 },
+  "compression": { "enabled": true, "strategy": "window", "max_prompt_tokens": 50, "keep_recent_turns": 2 },
+  "governance": {
+    "enabled": true,
+    "virtual_keys": [
+      { "key": "demo-key-123", "name": "demo-app", "rpm": 60, "max_tokens": 100000 },
+      { "key": "limited-key", "name": "throttled", "rpm": 2, "allowed_models": ["demo"] }
+    ]
+  },
+  "persistence": { "enabled": true, "path": "frostgate-state.json", "flush_seconds": 2 },
+  "cluster": { "enabled": true, "node_id": "demo-node-1" }
+}

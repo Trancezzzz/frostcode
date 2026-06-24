@@ -1,0 +1,8 @@
+/frostgate
+/frostcode
+/frostgate.exe
+/frostcode.exe
+frostgate-state.json
+frostgate-state.json.tmp
+*.test
+config.json
