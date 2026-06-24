@@ -59,7 +59,10 @@ type REPL struct {
 	mcp           *mcp.Manager
 	loadedSkills  map[string]bool
 	updateCh      <-chan update.CheckResult
+	history       []string // ring of last historyMax user inputs
 }
+
+const historyMax = 20
 
 // Options configures a REPL.
 type Options struct {
@@ -476,6 +479,10 @@ func (r *REPL) onExit() {
 // can abort a long turn without quitting the REPL.
 func (r *REPL) runTurn(input string) {
 	r.lastInput = input
+	r.history = append(r.history, input)
+	if len(r.history) > historyMax {
+		r.history = r.history[len(r.history)-historyMax:]
+	}
 	input = r.expandMentions(input)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -575,11 +582,14 @@ func (r *REPL) command(input string) bool {
 			r.replayHistory()
 		}
 	case "/sessions":
-		names := ListSessions()
-		if len(names) == 0 {
+		sessions := ListSessions()
+		if len(sessions) == 0 {
 			r.Info("no saved sessions")
 		} else {
-			r.Info("sessions: " + strings.Join(names, ", "))
+			fmt.Printf("%s sessions %s\n", cBold, cReset)
+			for _, s := range sessions {
+				fmt.Printf("  %s%-38s%s %s%s%s\n", cTeal, s.Name, cReset, cDim, formatAge(s.ModTime), cReset)
+			}
 		}
 	case "/compact":
 		saved, err := r.agent.Compact(context.Background(), true)
@@ -605,6 +615,10 @@ func (r *REPL) command(input string) bool {
 		r.Info(fmt.Sprintf("~%d tokens in context (%d messages)", r.agent.EstimatedTokens(), r.agent.Turns()))
 	case "/update":
 		r.selfUpdate()
+	case "/git":
+		r.runGit(arg)
+	case "/history":
+		r.showHistory()
 	default:
 		r.Error("unknown command " + cmd + " (try /help)")
 	}
@@ -866,6 +880,40 @@ func (r *REPL) initProjectDoc() {
 		return
 	}
 	r.Info("wrote FROSTCODE.md — it loads automatically next session (or /clear won't reload; restart to apply)")
+}
+
+// runGit runs a git subcommand in the project root and prints the output.
+// Usage: /git <args>  e.g. /git status, /git log --oneline -10, /git diff
+func (r *REPL) runGit(args string) {
+	if strings.TrimSpace(args) == "" {
+		r.Info("usage: /git <subcommand>  e.g. /git status, /git log --oneline -5")
+		return
+	}
+	parts := strings.Fields(args)
+	cmd := exec.Command("git", parts...)
+	cmd.Dir = r.root
+	out, err := cmd.CombinedOutput()
+	s := strings.TrimRight(string(out), "\n")
+	if s != "" {
+		for _, ln := range strings.Split(s, "\n") {
+			fmt.Printf("  %s%s%s\n", cDim, ln, cReset)
+		}
+	}
+	if err != nil && len(out) == 0 {
+		r.Error("git: " + err.Error())
+	}
+}
+
+// showHistory prints the last N user inputs for this session.
+func (r *REPL) showHistory() {
+	if len(r.history) == 0 {
+		r.Info("no history yet this session")
+		return
+	}
+	fmt.Printf("%s history %s(%d entries)%s\n", cBold, cDim, len(r.history), cReset)
+	for i, h := range r.history {
+		fmt.Printf("  %s%2d%s  %s\n", cTeal, i+1, cReset, firstLines(h, 1))
+	}
 }
 
 // showUpdateHint reads from the background update check channel (waiting at most

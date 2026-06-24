@@ -4,10 +4,12 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"frostgate/internal/schema"
 )
@@ -96,18 +98,49 @@ func (a *Agent) Load(name string) error {
 	return nil
 }
 
-// ListSessions returns the saved session names, newest-looking first.
-func ListSessions() []string {
+// SessionEntry is a saved session with its name and modification time.
+type SessionEntry struct {
+	Name    string
+	ModTime time.Time
+}
+
+// ListSessions returns saved sessions sorted newest-first.
+func ListSessions() []SessionEntry {
 	ents, err := os.ReadDir(sessionsDir())
 	if err != nil {
 		return nil
 	}
-	var out []string
+	var out []SessionEntry
 	for _, e := range ents {
-		if !e.IsDir() && strings.HasSuffix(e.Name(), ".json") {
-			out = append(out, strings.TrimSuffix(e.Name(), ".json"))
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
+			continue
 		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		out = append(out, SessionEntry{
+			Name:    strings.TrimSuffix(e.Name(), ".json"),
+			ModTime: info.ModTime(),
+		})
 	}
-	sort.Strings(out)
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].ModTime.After(out[j].ModTime)
+	})
 	return out
+}
+
+// formatAge returns a human-readable age string like "2h ago" or "3d ago".
+func formatAge(t time.Time) string {
+	d := time.Since(t)
+	switch {
+	case d < time.Minute:
+		return "just now"
+	case d < time.Hour:
+		return fmt.Sprintf("%dm ago", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%dh ago", int(d.Hours()))
+	default:
+		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
+	}
 }

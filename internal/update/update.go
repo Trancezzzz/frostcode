@@ -97,8 +97,9 @@ func IsNewer(currentVersion, releaseTag string) bool {
 	return false
 }
 
-// parseSemver parses a "vMAJOR.MINOR.PATCH" string into [3]int.
-// Malformed segments default to 0.
+// parseSemver parses a "vMAJOR.MINOR.PATCHsuffix" string into [3]int.
+// Non-numeric suffixes on any segment (e.g. the "b" in "v0.1.3b") are stripped
+// before parsing so beta tags compare correctly against release tags.
 func parseSemver(tag string) [3]int {
 	tag = strings.TrimPrefix(tag, "v")
 	parts := strings.SplitN(tag, ".", 3)
@@ -107,7 +108,12 @@ func parseSemver(tag string) [3]int {
 		if i >= 3 {
 			break
 		}
-		n, _ := strconv.Atoi(p)
+		// strip any trailing non-digit suffix (e.g. "3b" → "3", "0rc1" → "0")
+		end := len(p)
+		for end > 0 && (p[end-1] < '0' || p[end-1] > '9') {
+			end--
+		}
+		n, _ := strconv.Atoi(p[:end])
 		v[i] = n
 	}
 	return v

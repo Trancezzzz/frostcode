@@ -41,6 +41,8 @@ var paletteCommands = []cmdSpec{
 	{"/cost", "", "Show session token usage / cost"},
 	{"/context", "", "Show estimated tokens in context"},
 	{"/update", "", "Check for and install the latest release"},
+	{"/git", "<args>", "Run a git command in the project root (e.g. /git status)"},
+	{"/history", "", "Show recent inputs from this session"},
 	{"/retry", "", "Re-run your last message"},
 	{"/clear", "", "Reset the conversation"},
 	{"/cwd", "", "Show the working directory"},

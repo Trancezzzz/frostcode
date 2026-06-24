@@ -4,6 +4,19 @@ All notable changes are documented here. Releases follow `vMAJOR.MINOR.PATCH` se
 
 ---
 
+## v0.2.0 — 2026-06-25
+
+### Fixed
+- **`/update` version comparison broken for beta tags** — `parseSemver` now strips non-numeric suffixes (e.g. the `b` in `v0.1.3b`) before parsing, so `v0.1.3b` correctly compares as newer than `v0.1.1b` instead of treating them as equal.
+
+### New Features
+- **Regex grep** — the `grep` tool gains an optional `regex: true` parameter. When set, the query is compiled as a Go regular expression (e.g. `func\s+\w+Error`). Plain substring search remains the default.
+- **`/git <args>`** — run any git subcommand directly in the project root without going through the agent. E.g. `/git status`, `/git log --oneline -10`, `/git diff HEAD~1`.
+- **`/history`** — shows the last 20 user inputs from the current session, numbered. Useful for retracing what you asked.
+- **Session timestamps in `/sessions`** — the session list now shows each session's age (e.g. `2h ago`, `3d ago`) and is sorted newest-first instead of alphabetically.
+
+---
+
 ## v0.1.3b — 2026-06-25
 
 ### Added

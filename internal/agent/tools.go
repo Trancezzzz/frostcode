@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
 	"strings"
@@ -228,9 +229,11 @@ func DefaultTools(sb *Sandbox, sh *Shell) []Tool {
 		},
 		{
 			Name:        "grep",
-			Description: "Search file contents for a substring (case-sensitive). Returns matching path:line: text.",
+			Description: "Search file contents for a query string. Set regex=true to use a regular expression (Go syntax). Returns matching path:line: text.",
 			Schema: json.RawMessage(`{"type":"object","properties":{
-				"query":{"type":"string"},"path":{"type":"string","description":"subdir to search (optional)"}},
+				"query":{"type":"string"},
+				"path":{"type":"string","description":"subdir to search (optional)"},
+				"regex":{"type":"boolean","description":"treat query as a Go regular expression (default false)"}},
 				"required":["query"]}`),
 			Run: func(a map[string]any) (string, error) {
 				base := sb.Primary()
@@ -241,7 +244,7 @@ func DefaultTools(sb *Sandbox, sh *Shell) []Tool {
 					}
 					base = p
 				}
-				return grepFiles(sb.Primary(), base, str(a, "query"))
+				return grepFiles(sb.Primary(), base, str(a, "query"), boolOr(a, "regex", false))
 			},
 		},
 		{
@@ -536,10 +539,25 @@ func matchGlob(pattern, name string) bool {
 }
 
 // grepFiles searches under base for query, displaying paths relative to displayRoot.
+// When useRegex is true the query is compiled as a Go regular expression.
 // Results are capped at 200 matches; a notice is appended when the cap is hit.
-func grepFiles(displayRoot, base, query string) (string, error) {
+func grepFiles(displayRoot, base, query string, useRegex bool) (string, error) {
 	if query == "" {
 		return "", fmt.Errorf("empty query")
+	}
+	var re *regexp.Regexp
+	if useRegex {
+		var err error
+		re, err = regexp.Compile(query)
+		if err != nil {
+			return "", fmt.Errorf("invalid regex: %w", err)
+		}
+	}
+	match := func(line string) bool {
+		if re != nil {
+			return re.MatchString(line)
+		}
+		return strings.Contains(line, query)
 	}
 	var hits []string
 	truncated := false
@@ -557,7 +575,7 @@ func grepFiles(displayRoot, base, query string) (string, error) {
 		ln := 0
 		for sc.Scan() {
 			ln++
-			if strings.Contains(sc.Text(), query) {
+			if match(sc.Text()) {
 				rel, _ := filepath.Rel(displayRoot, path)
 				hits = append(hits, fmt.Sprintf("%s:%d: %s", filepath.ToSlash(rel), ln, strings.TrimSpace(sc.Text())))
 				if len(hits) >= 200 {
