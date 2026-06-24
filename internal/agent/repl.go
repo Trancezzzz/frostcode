@@ -612,9 +612,16 @@ func (r *REPL) command(input string) bool {
 		fmt.Printf("  %ssession%s · %d turns · %s%d tokens%s · %s~$0.00 (NIM free tier)%s\n",
 			cGray, cReset, r.sessionTurns, cBold, r.sessionTokens, cReset, cDim, cReset)
 	case "/context":
-		r.Info(fmt.Sprintf("~%d tokens in context (%d messages)", r.agent.EstimatedTokens(), r.agent.Turns()))
+		undo := r.agent.UndoDepth()
+		undoStr := ""
+		if undo > 0 {
+			undoStr = fmt.Sprintf(" · %d undo step(s) available", undo)
+		}
+		r.Info(fmt.Sprintf("~%d tokens in context (%d messages)%s", r.agent.EstimatedTokens(), r.agent.Turns(), undoStr))
 	case "/update":
 		r.selfUpdate()
+	case "/steps":
+		r.setSteps(arg)
 	case "/git":
 		r.runGit(arg)
 	case "/history":
@@ -882,6 +889,22 @@ func (r *REPL) initProjectDoc() {
 	r.Info("wrote FROSTCODE.md — it loads automatically next session (or /clear won't reload; restart to apply)")
 }
 
+// setSteps shows or sets the agent's max step budget.
+func (r *REPL) setSteps(arg string) {
+	arg = strings.TrimSpace(arg)
+	if arg == "" {
+		r.Info(fmt.Sprintf("max steps: %d (agent stops after this many tool rounds — use /steps <N> to change)", r.agent.maxSteps))
+		return
+	}
+	n, err := strconv.Atoi(arg)
+	if err != nil || n < 1 || n > 200 {
+		r.Error("steps must be a number between 1 and 200")
+		return
+	}
+	r.agent.maxSteps = n
+	r.Info(fmt.Sprintf("max steps → %d", n))
+}
+
 // runGit runs a git subcommand in the project root and prints the output.
 // Usage: /git <args>  e.g. /git status, /git log --oneline -10, /git diff
 func (r *REPL) runGit(args string) {
@@ -1091,7 +1114,7 @@ func mcpTools(mgr *mcp.Manager) []Tool {
 	}
 	out := make([]Tool, 0, len(specs))
 	for _, s := range specs {
-		name := s.Function.Name
+		name := s.Function.Name // capture per-iteration value
 		out = append(out, Tool{
 			Name:        name,
 			Description: "[MCP] " + s.Function.Description,

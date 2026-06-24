@@ -661,7 +661,7 @@ func treeView(base string, depth int) (string, error) {
 	if b.Len() == 0 {
 		return "(empty)", nil
 	}
-	return truncate(b.String(), 8000), nil
+	return truncate(b.String(), maxToolResultChars), nil
 }
 
 // fetchURL performs a GET and returns the body text, capped at 1 MiB.

@@ -105,7 +105,7 @@ func mcpAgentTools(mgr *mcp.Manager) []agent.Tool {
 	}
 	out := make([]agent.Tool, 0, len(specs))
 	for _, s := range specs {
-		name := s.Function.Name
+		name := s.Function.Name // capture per-iteration value
 		out = append(out, agent.Tool{
 			Name:        name,
 			Description: "[MCP] " + s.Function.Description,

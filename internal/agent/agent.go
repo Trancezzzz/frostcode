@@ -403,9 +403,22 @@ func (a *Agent) Run(ctx context.Context, userInput string) error {
 			a.ui.StreamEnd() // close the streamed text before tool output
 		}
 
+		// Warn when approaching the step budget.
+		remaining := a.maxSteps - step - 1
+		if remaining == a.maxSteps/5 && remaining > 0 {
+			a.ui.Info(fmt.Sprintf("approaching step limit: %d of %d steps used — use /steps to raise the limit", step+1, a.maxSteps))
+		}
+
 		// Execute each requested tool, appending a tool result message.
+		// We run all tool calls even if context is cancelled so the
+		// conversation stays consistent (every tool_call gets a result).
 		for _, c := range calls {
 			a.execToolCall(c)
+		}
+		if ctx.Err() != nil {
+			a.ui.Info("interrupted")
+			a.ui.TurnStats(time.Since(start), tokenCount)
+			return nil
 		}
 	}
 	a.ui.TurnStats(time.Since(start), tokenCount)

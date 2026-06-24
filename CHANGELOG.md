@@ -4,6 +4,22 @@ All notable changes are documented here. Releases follow `vMAJOR.MINOR.PATCH` se
 
 ---
 
+## v0.2.1 — 2026-06-25
+
+### Fixed
+- **MCP tool closure bug** — all MCP tools were calling the last registered tool due to loop variable capture; each closure now captures its own `name` value. Affected both `repl.go` and `cmd/frostcode/main.go`.
+- **Session resume restores Effort + Temperature** — `/effort` and `/temp` settings are now saved in session files and restored on resume.
+- **Context cancel mid-tool no longer corrupts conversation** — the tool loop now appends every tool result before checking for cancellation, keeping `tool_call`/`tool_result` pairs consistent.
+- **Windows shell sentinel fix** — `cmd.exe` fallback now uses `echo %ERRORLEVEL%` instead of bash `printf`, preventing the shell from hanging on the sentinel line. Also prefers Git Bash over `cmd.exe` when available.
+- **Unified tool truncation** — `treeView` now uses `maxToolResultChars` (8000) instead of its own hardcoded 8000, so the limit is one place to change.
+- **Bash tool timeout hardcoded to 30s** — was 120s; shell sessions reset and report the timeout clearly with a hint.
+
+### Added
+- **`/steps [N]`** — show or set the agent's max tool-step budget. Warns at 80% of the budget during a turn.
+- **Undo depth in `/context`** — `/context` now shows how many undo steps are available (e.g. `· 3 undo step(s) available`).
+
+---
+
 ## v0.2.0 — 2026-06-25
 
 ### Fixed

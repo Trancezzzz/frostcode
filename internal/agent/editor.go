@@ -40,6 +40,7 @@ var paletteCommands = []cmdSpec{
 	{"/compact", "", "Summarize old turns to free context"},
 	{"/cost", "", "Show session token usage / cost"},
 	{"/context", "", "Show estimated tokens in context"},
+	{"/steps", "[N]", "Show or set the agent's max tool-step budget (default 25)"},
 	{"/update", "", "Check for and install the latest release"},
 	{"/git", "<args>", "Run a git command in the project root (e.g. /git status)"},
 	{"/history", "", "Show recent inputs from this session"},

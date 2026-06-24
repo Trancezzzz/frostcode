@@ -26,9 +26,11 @@ func NewSessionID() string {
 
 // sessionData is the persisted form of a conversation.
 type sessionData struct {
-	Model    string           `json:"model"`
-	Mode     string           `json:"mode"`
-	Messages []schema.Message `json:"messages"`
+	Model       string           `json:"model"`
+	Mode        string           `json:"mode"`
+	Effort      string           `json:"effort,omitempty"`
+	Temperature *float64         `json:"temperature,omitempty"`
+	Messages    []schema.Message `json:"messages"`
 }
 
 // sessionsDir is ~/.frostcode/sessions.
@@ -59,7 +61,7 @@ func (a *Agent) Save(name string) error {
 	if err := os.MkdirAll(sessionsDir(), 0o755); err != nil {
 		return err
 	}
-	data := sessionData{Model: a.Model, Mode: a.mode.String(), Messages: a.messages}
+	data := sessionData{Model: a.Model, Mode: a.mode.String(), Effort: a.Effort, Temperature: a.Temperature, Messages: a.messages}
 	b, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
 		return err
@@ -88,6 +90,12 @@ func (a *Agent) Load(name string) error {
 		a.mode = ModePlan
 	} else {
 		a.mode = ModeBuild
+	}
+	if data.Effort != "" {
+		a.Effort = data.Effort
+	}
+	if data.Temperature != nil {
+		a.Temperature = data.Temperature
 	}
 	a.messages = data.Messages
 	// Ensure the system prompt reflects the (possibly new) mode.
