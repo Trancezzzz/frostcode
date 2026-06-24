@@ -864,8 +864,12 @@ func (r *REPL) selfUpdate() {
 		r.Error("update check failed: " + err.Error())
 		return
 	}
+	if version.Version == "dev" || version.Version == "" {
+		r.Info("dev build — latest release is " + rel.TagName)
+		return
+	}
 	if !update.IsNewer(version.Version, rel.TagName) {
-		r.Info("already up to date (" + version.Version + ")")
+		r.Info("you're up to date! frostcode " + version.Version + " is the latest release")
 		return
 	}
 	r.Info(fmt.Sprintf("new version available: %s → %s", version.Version, rel.TagName))

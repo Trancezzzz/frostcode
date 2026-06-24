@@ -1,6 +1,15 @@
 # Changelog
 
-All notable changes are documented here. Releases are tagged `vMAJOR.MINOR.PATCH`.
+All notable changes are documented here. Releases follow `vMAJOR.MINOR.PATCH` semver; beta releases append a `b` suffix (e.g. `v0.1.1b`).
+
+---
+
+## v0.1.1b — 2026-06-25
+
+### Fixed
+- **Version detection** — `/update` now uses proper semver comparison instead of string equality, so builds ahead of the latest release are no longer incorrectly flagged as outdated.
+- **Dev builds** — dev/local builds no longer fall into the update flow; `/update` prints `"dev build — latest release is vX.Y.Z"` instead.
+- **Up-to-date message** — when already on the latest release, frostcode now says `"you're up to date! frostcode vX.Y.Z is the latest release"`.
 
 ---
 

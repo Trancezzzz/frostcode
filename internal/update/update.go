@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -59,14 +60,40 @@ func Check() (*Release, error) {
 	return &rel, nil
 }
 
-// IsNewer reports whether releaseTag is a newer semver than currentVersion.
-// Both are expected to be "vMAJOR.MINOR.PATCH"; "dev" builds are always
-// considered outdated so local developers can test the flow.
+// IsNewer reports whether releaseTag is strictly newer than currentVersion
+// using semver comparison. Both are expected to be "vMAJOR.MINOR.PATCH".
+// Returns false for dev/empty builds so they are treated as up-to-date.
 func IsNewer(currentVersion, releaseTag string) bool {
 	if currentVersion == "dev" || currentVersion == "" {
-		return true
+		return false
 	}
-	return releaseTag != currentVersion
+	cur := parseSemver(currentVersion)
+	rel := parseSemver(releaseTag)
+	for i := range cur {
+		if rel[i] > cur[i] {
+			return true
+		}
+		if rel[i] < cur[i] {
+			return false
+		}
+	}
+	return false
+}
+
+// parseSemver parses a "vMAJOR.MINOR.PATCH" string into [3]int.
+// Malformed segments default to 0.
+func parseSemver(tag string) [3]int {
+	tag = strings.TrimPrefix(tag, "v")
+	parts := strings.SplitN(tag, ".", 3)
+	var v [3]int
+	for i, p := range parts {
+		if i >= 3 {
+			break
+		}
+		n, _ := strconv.Atoi(p)
+		v[i] = n
+	}
+	return v
 }
 
 // BinaryAsset returns the release asset whose name matches the current
