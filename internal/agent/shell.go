@@ -15,9 +15,10 @@ import (
 // environment changes (cd, export, ...) persist across bash tool calls — unlike
 // spawning a fresh process per command. Commands run sequentially.
 type Shell struct {
-	dir     string
-	isCmd   bool          // true when running Windows cmd.exe instead of bash
-	timeout time.Duration // per-command timeout; 0 uses defaultShellTimeout
+	dir      string
+	isCmd    bool          // true when running Windows cmd.exe instead of bash
+	timeout  time.Duration // per-command timeout; 0 uses defaultShellTimeout
+	OnLine   func(string)  // optional: called for each output line while streaming
 
 	mu     sync.Mutex
 	cmd    *exec.Cmd
@@ -92,8 +93,16 @@ func (s *Shell) ensure() error {
 }
 
 // Run executes command in the persistent session and returns its combined
-// output. cd/export persist for subsequent calls.
+// output. cd/export persist for subsequent calls. If OnLine is set, each
+// output line is forwarded to it as it arrives for live streaming.
 func (s *Shell) Run(command string, timeout time.Duration) (string, error) {
+	return s.RunStream(command, timeout, s.OnLine)
+}
+
+// RunStream executes command like Run but calls onLine for each output line as
+// it arrives, enabling live streaming to the terminal. Pass nil for onLine to
+// get the same behaviour as Run.
+func (s *Shell) RunStream(command string, timeout time.Duration, onLine func(string)) (string, error) {
 	if strings.TrimSpace(command) == "" {
 		return "", fmt.Errorf("empty command")
 	}
@@ -104,13 +113,13 @@ func (s *Shell) Run(command string, timeout time.Duration) (string, error) {
 	}
 	// Run the command with stderr merged, then emit a sentinel + exit code.
 	// cmd.exe uses different syntax for exit-code capture.
-	var line string
+	var cmdLine string
 	if s.isCmd {
-		line = fmt.Sprintf("%s\r\necho %s%%ERRORLEVEL%%\r\n", command, shellSentinel)
+		cmdLine = fmt.Sprintf("%s\r\necho %s%%ERRORLEVEL%%\r\n", command, shellSentinel)
 	} else {
-		line = fmt.Sprintf("{ %s ; } 2>&1 ; printf '\\n%s%%d\\n' \"$?\"\n", command, shellSentinel)
+		cmdLine = fmt.Sprintf("{ %s ; } 2>&1 ; printf '\\n%s%%d\\n' \"$?\"\n", command, shellSentinel)
 	}
-	if _, err := io.WriteString(s.stdin, line); err != nil {
+	if _, err := io.WriteString(s.stdin, cmdLine); err != nil {
 		s.kill()
 		return "", err
 	}
@@ -131,6 +140,9 @@ func (s *Shell) Run(command string, timeout time.Duration) (string, error) {
 				return
 			}
 			b.WriteString(ln)
+			if onLine != nil && ln != "" {
+				onLine(strings.TrimRight(ln, "\n"))
+			}
 			if err != nil {
 				ch <- result{out: b.String(), code: "?"}
 				return
@@ -150,8 +162,8 @@ func (s *Shell) Run(command string, timeout time.Duration) (string, error) {
 		}
 		return truncate(out, 16000), nil
 	case <-time.After(tmo):
-		s.kill() // command is stuck; reset the session
-		return fmt.Sprintf("[timed out after %s; shell session reset — use /timeout to raise the limit]", tmo), nil
+		s.kill()
+		return fmt.Sprintf("[timed out after %s; shell session reset]", tmo), nil
 	}
 }
 

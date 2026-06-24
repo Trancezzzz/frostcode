@@ -4,6 +4,14 @@ All notable changes are documented here. Releases follow `vMAJOR.MINOR.PATCH` se
 
 ---
 
+## v0.3.0 — 2026-06-25
+
+### New Features
+- **Shell output streaming** — the bash tool now streams each output line to the terminal as it arrives instead of buffering everything until the command finishes. Long builds and test runs show live progress. Implemented via `Shell.RunStream` / `Shell.OnLine` callback.
+- **Parallel non-destructive tool execution** — when the model requests multiple read-only tools in one turn (e.g. three `read_file` calls), they now fan out concurrently. Destructive tools (file writes, shell commands) still run sequentially so approval prompts and undo capture stay single-threaded. Typical speedup: 2–3× on read-heavy turns.
+
+---
+
 ## v0.2.1 — 2026-06-25
 
 ### Fixed

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"frostgate/internal/schema"
@@ -409,12 +410,11 @@ func (a *Agent) Run(ctx context.Context, userInput string) error {
 			a.ui.Info(fmt.Sprintf("approaching step limit: %d of %d steps used — use /steps to raise the limit", step+1, a.maxSteps))
 		}
 
-		// Execute each requested tool, appending a tool result message.
-		// We run all tool calls even if context is cancelled so the
-		// conversation stays consistent (every tool_call gets a result).
-		for _, c := range calls {
-			a.execToolCall(c)
-		}
+		// Execute tool calls. Non-destructive calls fan out in parallel;
+		// destructive calls always run sequentially (approval + undo capture
+		// are not goroutine-safe). We always append every result so the
+		// conversation stays consistent even if context is cancelled.
+		a.execToolCalls(calls)
 		if ctx.Err() != nil {
 			a.ui.Info("interrupted")
 			a.ui.TurnStats(time.Since(start), tokenCount)
@@ -424,6 +424,86 @@ func (a *Agent) Run(ctx context.Context, userInput string) error {
 	a.ui.TurnStats(time.Since(start), tokenCount)
 	a.ui.Error(fmt.Sprintf("stopped after %d steps (step budget reached)", a.maxSteps))
 	return nil
+}
+
+// execToolCalls runs a batch of tool calls from one model turn. Non-destructive
+// calls are fanned out in parallel; destructive calls run sequentially so that
+// approval prompts and undo capture stay single-threaded.
+func (a *Agent) execToolCalls(calls []schema.ToolCall) {
+	// Separate into read-only (parallel) and destructive (sequential) groups,
+	// preserving the original order for result insertion.
+	type slot struct {
+		call   schema.ToolCall
+		result string // filled in by goroutine or sequential run
+	}
+	slots := make([]slot, len(calls))
+	for i, c := range calls {
+		slots[i].call = c
+	}
+
+	// Identify non-destructive indices that can run in parallel.
+	var roIdx []int
+	for i, c := range calls {
+		t, ok := a.byName[c.Function.Name]
+		if ok && !t.Destructive {
+			roIdx = append(roIdx, i)
+		}
+	}
+
+	if len(roIdx) > 1 {
+		// Fan out all non-destructive calls concurrently.
+		var wg sync.WaitGroup
+		results := make([]string, len(calls))
+		for _, i := range roIdx {
+			i := i
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				// execToolCall appends to a.messages which is not safe
+				// concurrently — run the tool directly and collect the result.
+				c := calls[i]
+				name := c.Function.Name
+				tool := a.byName[name]
+				args := parseArgs(c.Function.Arguments)
+				a.ui.ToolStart(name, previewOf(name, args))
+				out, err := tool.Run(args)
+				if err != nil {
+					results[i] = "error: " + err.Error()
+				} else {
+					results[i] = out
+				}
+			}()
+		}
+		wg.Wait()
+		// Append results in original order, show tool output.
+		for _, i := range roIdx {
+			c := calls[i]
+			name := c.Function.Name
+			res := results[i]
+			a.appendToolResult(c.ID, res)
+			if name == "todo_write" {
+				a.ui.Todos(parseTodos(parseArgs(c.Function.Arguments)))
+			} else {
+				a.ui.ToolResult(name, res)
+			}
+		}
+	} else {
+		// ≤1 non-destructive call — just run sequentially (no fan-out overhead).
+		for _, i := range roIdx {
+			a.execToolCall(calls[i])
+		}
+	}
+
+	// Run destructive calls sequentially.
+	roSet := make(map[int]bool, len(roIdx))
+	for _, i := range roIdx {
+		roSet[i] = true
+	}
+	for i, c := range calls {
+		if !roSet[i] {
+			a.execToolCall(c)
+		}
+	}
 }
 
 // execToolCall parses arguments, gates destructive actions, runs the tool, and

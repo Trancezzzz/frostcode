@@ -93,6 +93,9 @@ func NewREPL(opt Options) *REPL {
 	r.caller = opt.Caller
 	r.sandbox = NewSandbox(opt.Root)
 	r.shell = NewShell(opt.Root)
+	r.shell.OnLine = func(line string) {
+		fmt.Printf("    %s%s%s\n", cDim, line, cReset)
+	}
 	tools := DefaultTools(r.sandbox, r.shell)
 	r.agent = New(opt.Model, opt.Caller, tools, r.approve, r, systemPrompt(opt.Root))
 	// Sub-agent delegation tool + any MCP-backed tools.
