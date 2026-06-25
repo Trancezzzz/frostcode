@@ -9,8 +9,10 @@ import (
 	"fmt"
 	"hash/maphash"
 	"io"
+	"math/rand"
 	"strings"
 	"sync"
+	"time"
 
 	"frostgate/internal/config"
 	"frostgate/internal/provider"
@@ -155,8 +157,9 @@ func (r *Router) Providers() []string {
 var ErrAllFailed = errors.New("all routing targets failed")
 
 // Chat runs attempts in order, returning the first success. Non-retryable
-// errors (4xx other than 429) short-circuit. Returns the number of attempts
-// made and the winning attempt for metadata.
+// errors (4xx other than 429) short-circuit. 429s honour Retry-After and
+// back off with jitter before trying the next target. Returns the number of
+// attempts made and the winning attempt for metadata.
 func (r *Router) Chat(ctx context.Context, attempts []Attempt, req *schema.ChatRequest) (*schema.ChatResponse, Attempt, int, error) {
 	var lastErr error
 	for i, a := range attempts {
@@ -167,6 +170,9 @@ func (r *Router) Chat(ctx context.Context, attempts []Attempt, req *schema.ChatR
 		lastErr = err
 		if !retryable(err) {
 			return nil, a, i + 1, err
+		}
+		if err := backoff(ctx, err, i); err != nil {
+			return nil, a, i + 1, err // context cancelled during wait
 		}
 	}
 	return nil, Attempt{}, len(attempts), fmt.Errorf("%w: %v", ErrAllFailed, lastErr)
@@ -186,8 +192,35 @@ func (r *Router) Stream(ctx context.Context, attempts []Attempt, req *schema.Cha
 		if !retryable(err) {
 			return a, i + 1, err
 		}
+		if err := backoff(ctx, err, i); err != nil {
+			return a, i + 1, err
+		}
 	}
 	return Attempt{}, len(attempts), fmt.Errorf("%w: %v", ErrAllFailed, lastErr)
+}
+
+// backoff sleeps before a retry. If the error carries a Retry-After duration
+// that is honoured first; otherwise exponential backoff with ±25% jitter:
+// attempt 0→1s, 1→2s, 2→4s, capped at 16s.
+func backoff(ctx context.Context, err error, attempt int) error {
+	var wait time.Duration
+	var he *provider.HTTPError
+	if errors.As(err, &he) && he.RetryAfter > 0 {
+		wait = he.RetryAfter
+	} else {
+		base := time.Duration(1<<uint(attempt)) * time.Second
+		if base > 16*time.Second {
+			base = 16 * time.Second
+		}
+		jitter := time.Duration(rand.Int63n(int64(base) / 2)) // ±25%
+		wait = base + jitter - base/4
+	}
+	select {
+	case <-time.After(wait):
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func retryable(err error) bool {

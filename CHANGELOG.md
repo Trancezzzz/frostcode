@@ -4,6 +4,18 @@ All notable changes are documented here. Releases follow `vMAJOR.MINOR.PATCH` se
 
 ---
 
+## v0.3.1 — 2026-06-25
+
+### Fixed
+- **MCP connection warning suppressed** — failed optional MCP servers (e.g. `remote-tools` not running) no longer print `warning: ...` to stderr on startup. Disconnected servers are still visible in `/mcp` with their error.
+- **Provider error messages improved** — 429s now say `"rate limited (429) — retry after 30s"` instead of dumping raw JSON. All HTTP errors include the status code.
+- **`Retry-After` header respected** — when a provider returns 429 with a `Retry-After` header, the router waits exactly that long before trying the next target instead of ignoring it.
+- **Exponential backoff between retries** — router now backs off between fallback attempts: 1s → 2s → 4s → 8s → 16s cap, with ±25% jitter. Previously retried instantly.
+- **`HTTPErrorFromResp` unified** — both OpenAI and Anthropic adapters now use a single helper to read error bodies and extract `Retry-After`, replacing duplicated code.
+- **Removed dead `time.Now` stub** from `openai.go`.
+
+---
+
 ## v0.3.0 — 2026-06-25
 
 ### New Features

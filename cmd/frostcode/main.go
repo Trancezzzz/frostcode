@@ -50,10 +50,8 @@ func main() {
 	defer cleanup()
 
 	// Connect MCP servers and expose their tools to the agent.
-	mcpMgr, mcpErrs := mcp.NewManager(cfg.MCP)
-	for _, e := range mcpErrs {
-		fmt.Fprintf(os.Stderr, "warning: %v\n", e)
-	}
+	// Connection errors are non-fatal — disconnected servers are visible in /mcp.
+	mcpMgr, _ := mcp.NewManager(cfg.MCP)
 	defer mcpMgr.Close()
 
 	absRoot, err := filepath.Abs(*root)

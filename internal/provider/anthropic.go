@@ -30,7 +30,7 @@ func NewAnthropic(name, baseURL string) *Anthropic {
 	if baseURL == "" {
 		baseURL = "https://api.anthropic.com/v1"
 	}
-	return &Anthropic{name: name, baseURL: baseURL, client: &http.Client{}, version: "2023-06-01"}
+	return &Anthropic{name: name, baseURL: baseURL, client: &http.Client{}, version: "2023-06-01"} // bump when Anthropic releases a newer stable version
 }
 
 func (a *Anthropic) Name() string { return a.name }
@@ -104,10 +104,10 @@ func (a *Anthropic) Chat(ctx context.Context, apiKey, model string, req *schema.
 		return nil, err
 	}
 	defer resp.Body.Close()
-	raw, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode >= 400 {
-		return nil, &HTTPError{Status: resp.StatusCode, Body: string(raw)}
+		return nil, HTTPErrorFromResp(resp)
 	}
+	raw, _ := io.ReadAll(resp.Body)
 	// Parse Anthropic's response and map to OpenAI shape.
 	var ar struct {
 		ID      string `json:"id"`
@@ -170,8 +170,7 @@ func (a *Anthropic) Stream(ctx context.Context, apiKey, model string, req *schem
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
-		raw, _ := io.ReadAll(resp.Body)
-		return &HTTPError{Status: resp.StatusCode, Body: string(raw)}
+		return HTTPErrorFromResp(resp)
 	}
 	// Translate Anthropic SSE events into OpenAI-style chat.completion.chunk
 	// deltas so clients see a uniform stream regardless of provider.

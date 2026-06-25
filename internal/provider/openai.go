@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"time"
 
 	"frostgate/internal/schema"
 )
@@ -90,10 +89,10 @@ func (o *OpenAI) Chat(ctx context.Context, apiKey, model string, req *schema.Cha
 		return nil, err
 	}
 	defer resp.Body.Close()
-	raw, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode >= 400 {
-		return nil, &HTTPError{Status: resp.StatusCode, Body: string(raw)}
+		return nil, HTTPErrorFromResp(resp)
 	}
+	raw, _ := io.ReadAll(resp.Body)
 	var out schema.ChatResponse
 	if err := json.Unmarshal(raw, &out); err != nil {
 		return nil, fmt.Errorf("decode openai response: %w", err)
@@ -120,8 +119,7 @@ func (o *OpenAI) Stream(ctx context.Context, apiKey, model string, req *schema.C
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
-		raw, _ := io.ReadAll(resp.Body)
-		return &HTTPError{Status: resp.StatusCode, Body: string(raw)}
+		return HTTPErrorFromResp(resp)
 	}
 	// Pass SSE chunks straight through; the OpenAI stream format already
 	// matches what clients expect.
@@ -141,4 +139,3 @@ func (o *OpenAI) Stream(ctx context.Context, apiKey, model string, req *schema.C
 	return sc.Err()
 }
 
-var _ = time.Now // reserved for future retry/backoff timing
