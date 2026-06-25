@@ -1151,10 +1151,19 @@ func mcpStatusText(s mcp.ServerInfo) string {
 	return cRed + "disconnected" + cReset
 }
 
+func (r *REPL) modelTargetSuffix(alias string) string {
+	if r.targets != nil {
+		if t, ok := r.targets[alias]; ok {
+			return fmt.Sprintf(" %s(%s)%s", cDim, t, cReset)
+		}
+	}
+	return ""
+}
+
 func (r *REPL) pickModel(arg string) {
 	if arg != "" { // direct switch
 		r.agent.Model = arg
-		r.Info("model → " + arg)
+		r.Info("model → " + arg + r.modelTargetSuffix(arg))
 		return
 	}
 	if len(r.models) == 0 {
@@ -1163,7 +1172,15 @@ func (r *REPL) pickModel(arg string) {
 	}
 	fmt.Printf("%s models %s(current: %s%s%s)\n", cBold, cReset, cTeal, r.agent.Model, cReset)
 	for i, m := range r.models {
-		fmt.Printf("  %s%d%s  %s\n", cTeal, i+1, cReset, m)
+		suffix := ""
+		if t, ok := r.targets[m]; ok {
+			suffix = fmt.Sprintf("  %s(%s)%s", cDim, t, cReset)
+		}
+		mark := " "
+		if m == r.agent.Model {
+			mark = cTeal + "✓" + cReset
+		}
+		fmt.Printf("  %s%d%s %s %s%s%s%s\n", cTeal, i+1, cReset, mark, cBold, m, cReset, suffix)
 	}
 	fmt.Printf("%s pick a number (or enter to cancel): %s", cDim, cReset)
 	line, _ := r.cookedLine()

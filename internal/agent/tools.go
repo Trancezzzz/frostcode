@@ -104,7 +104,7 @@ func DefaultTools(sb *Sandbox, sh *Shell) []Tool {
 				if err != nil {
 					return "", err
 				}
-				lines := strings.Split(string(b), "\n")
+				lines := strings.Split(strings.ReplaceAll(string(b), "\r\n", "\n"), "\n")
 				start, limit := intOr(a, "offset", 1), intOr(a, "limit", len(lines))
 				if start < 1 {
 					start = 1
@@ -158,14 +158,18 @@ func DefaultTools(sb *Sandbox, sh *Shell) []Tool {
 				}
 				body := string(b)
 				old, neu := str(a, "old_string"), str(a, "new_string")
-				n := strings.Count(body, old)
+				// Normalize CRLF so Windows files match LF-only old_string from the model.
+				normalBody := strings.ReplaceAll(body, "\r\n", "\n")
+				normalOld := strings.ReplaceAll(old, "\r\n", "\n")
+				n := strings.Count(normalBody, normalOld)
 				if n == 0 {
 					return "", fmt.Errorf("old_string not found in %s", str(a, "path"))
 				}
 				if n > 1 && !boolOr(a, "replace_all", false) {
 					return "", fmt.Errorf("old_string occurs %d times; set replace_all or add more context", n)
 				}
-				out := strings.ReplaceAll(body, old, neu)
+				normalNeu := strings.ReplaceAll(neu, "\r\n", "\n")
+				out := strings.ReplaceAll(normalBody, normalOld, normalNeu)
 				if err := os.WriteFile(p, []byte(out), 0o644); err != nil {
 					return "", err
 				}
@@ -266,7 +270,8 @@ func DefaultTools(sb *Sandbox, sh *Shell) []Tool {
 				if err != nil {
 					return "", err
 				}
-				body := string(b)
+				// Normalize CRLF once up front; all edits operate on the normalized body.
+				body := strings.ReplaceAll(string(b), "\r\n", "\n")
 				edits, _ := a["edits"].([]any)
 				if len(edits) == 0 {
 					return "", fmt.Errorf("no edits provided")
@@ -274,7 +279,8 @@ func DefaultTools(sb *Sandbox, sh *Shell) []Tool {
 				applied := 0
 				for i, raw := range edits {
 					e, _ := raw.(map[string]any)
-					old, neu := str(e, "old_string"), str(e, "new_string")
+					old := strings.ReplaceAll(str(e, "old_string"), "\r\n", "\n")
+					neu := strings.ReplaceAll(str(e, "new_string"), "\r\n", "\n")
 					cnt := strings.Count(body, old)
 					if cnt == 0 {
 						return "", fmt.Errorf("edit %d: old_string not found", i+1)
